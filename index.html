@@ -3,26 +3,36 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Sound Timer"/>
 <title>Sound Trigger Timer</title>
 <link rel="stylesheet" href="styles.css"/>
+<link rel="manifest" href="manifest.webmanifest"/>
 </head>
 <body>
 <main class="app">
 <section class="card">
 <h1>Sound Trigger Timer</h1>
+<p class="sub">Sound trigger → adjustable delay → latency compensation → one crisp 2–3 second sound.</p>
 
 <label>
-Alarm Sound
+Sound
 <select id="soundChoice">
 <option value="beep">Beep</option>
 <option value="alarm">Alarm</option>
 <option value="gong">Gong</option>
-<option value="woo">Woo-style shout</option>
+<option value="woo">Woo-style sound</option>
 </select>
 </label>
 
 <label>
-Delay After Trigger:
+Sound Length:
+<strong><span id="durationValue">2.50</span>s</strong>
+<input id="duration" type="range" min="2.00" max="3.00" step="0.05" value="2.50"/>
+</label>
+
+<label>
+Target Audible Delay After Trigger:
 <strong><span id="intervalValue">0.45</span>s</strong>
 <input id="interval" type="range" min="0.45" max="1.50" step="0.01" value="0.45"/>
 </label>
@@ -33,23 +43,39 @@ Trigger Threshold:
 <input id="threshold" type="range" min="-80" max="-5" step="1" value="-35"/>
 </label>
 
+<label>
+Volume:
+<strong><span id="volumeValue">100</span>%</strong>
+<input id="volume" type="range" min="0" max="100" step="1" value="100"/>
+</label>
+
+<div class="calibration">
+<h2>Bluetooth Latency Calibration</h2>
+<p id="latencyReadout">Measured latency: <strong>0 ms</strong></p>
+<p id="effectiveDelay">Effective app delay: <strong>0.45s</strong></p>
 <div class="row">
-<button id="armBtn">Arm Trigger</button>
+<button id="calibrateBtn">Measure Latency</button>
+<button id="clearLatencyBtn">Clear Offset</button>
+</div>
+<p class="hint">During calibration, keep the phone mic close to the speaker. The app plays a chirp and listens for when it arrives.</p>
+</div>
+
+<div class="row">
+<button id="armBtn" class="primary">Arm Trigger</button>
 <button id="testBtn">Test Sound</button>
 </div>
 
 <div class="status">
-<div>State: <span id="state">Idle</span></div>
-<div>Elapsed: <span id="elapsed">00:00.00</span></div>
+<div><span class="label">State</span><strong id="state">Idle</strong></div>
+<div><span class="label">Elapsed</span><strong id="elapsed">00:00.00</strong></div>
 </div>
 
 <div class="meter">
 <div id="meterBar"></div>
 </div>
-
 <div id="dbReadout">-- dB</div>
 
-<button id="stopBtn">Stop / Reset</button>
+<button id="stopBtn" class="danger">Stop / Reset</button>
 
 <script src="app.js"></script>
 </section>
