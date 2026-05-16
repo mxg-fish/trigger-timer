@@ -14,6 +14,7 @@ const meterBar=document.getElementById("meterBar");
 const dbReadout=document.getElementById("dbReadout");
 const latencyReadout=document.getElementById("latencyReadout");
 const effectiveDelay=document.getElementById("effectiveDelay");
+const testBtn=document.getElementById("testBtn");
 
 let ctx, analyser, mic, source;
 let armed=false;
@@ -22,13 +23,17 @@ let raf;
 let active=[];
 let timingTimeout=null;
 let stopTimeout=null;
+let soundStartedAt=0;
+let soundDurationMs=2500;
 let latencyMs=Number(localStorage.getItem("soundTimerLatencyMs") || 0);
 
 function sync(){
+ const dur=Number(duration.value);
  intervalValue.textContent=Number(interval.value).toFixed(2);
  thresholdValue.textContent=threshold.value;
- durationValue.textContent=Number(duration.value).toFixed(2);
+ durationValue.textContent=dur.toFixed(2);
  volumeValue.textContent=volume.value;
+ testBtn.textContent=`Test ${dur.toFixed(2)}s Sound`;
 
  const targetMs=Number(interval.value)*1000;
  const appDelayMs=Math.max(0,targetMs-latencyMs);
@@ -75,46 +80,31 @@ function elapsed(){
  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(h).padStart(2,"0")}`;
 }
 
-function makeTone({freq=1000,endFreq=null,type="sine",dur=2.5,gainAmt=1,start=0}){
+function makeTone({freq=1000,endFreq=null,type="sine",start=0,dur=2.5,gainAmt=1}){
  const o=ctx.createOscillator();
  const g=ctx.createGain();
- const now=ctx.currentTime+start;
- const end=now+dur;
+ const startTime=ctx.currentTime+start;
+ const endTime=startTime+dur;
 
  o.type=type;
- o.frequency.setValueAtTime(freq,now);
- if(endFreq!==null) o.frequency.exponentialRampToValueAtTime(Math.max(1,endFreq),end);
+ o.frequency.setValueAtTime(freq,startTime);
+ if(endFreq!==null) {
+   o.frequency.exponentialRampToValueAtTime(Math.max(1,endFreq),endTime);
+ }
 
- g.gain.setValueAtTime(0.0001,now);
- g.gain.exponentialRampToValueAtTime(Math.max(.0001,gainAmt),now+.025);
- g.gain.setValueAtTime(Math.max(.0001,gainAmt),end-.12);
- g.gain.exponentialRampToValueAtTime(0.0001,end);
+ const attack=0.015;
+ const release=Math.min(0.18,dur*0.18);
+ const peak=Math.max(.0001,gainAmt);
 
- o.connect(g).connect(ctx.destination);
- o.start(now);
- o.stop(end+.03);
- active.push(o,g);
-}
-
-function playCalibrationChirp(){
- const o=ctx.createOscillator();
- const g=ctx.createGain();
- const now=ctx.currentTime;
- const dur=.08;
-
- o.type="square";
- o.frequency.setValueAtTime(2000,now);
-
- g.gain.setValueAtTime(0.0001,now);
- g.gain.exponentialRampToValueAtTime(1,now+.005);
- g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+ g.gain.setValueAtTime(0.0001,startTime);
+ g.gain.exponentialRampToValueAtTime(peak,startTime+attack);
+ g.gain.setValueAtTime(peak,Math.max(startTime+attack,endTime-release));
+ g.gain.exponentialRampToValueAtTime(0.0001,endTime);
 
  o.connect(g).connect(ctx.destination);
- o.start(now);
- o.stop(now+dur+.02);
+ o.start(startTime);
+ o.stop(endTime+.04);
  active.push(o,g);
-
- return performance.now();
 }
 
 function playSound(){
@@ -123,23 +113,26 @@ function playSound(){
  const dur=Number(duration.value);
  const vol=Math.max(.0001,Number(volume.value)/100);
  const s=soundChoice.value;
+ soundStartedAt=performance.now();
+ soundDurationMs=dur*1000;
 
+ // Every option below starts once and ends exactly from the Sound Length slider.
  if(s==="beep"){
    makeTone({freq:1050,type:"sine",dur,gainAmt:vol});
  }
 
  if(s==="alarm"){
-   makeTone({freq:1250,endFreq:850,type:"square",dur,gainAmt:vol});
+   makeTone({freq:1200,endFreq:900,type:"square",dur,gainAmt:vol});
  }
 
  if(s==="gong"){
-   makeTone({freq:260,endFreq:120,type:"triangle",dur,gainAmt:vol});
-   makeTone({freq:390,endFreq:180,type:"sine",dur:dur*.95,gainAmt:vol*.35});
+   makeTone({freq:260,endFreq:95,type:"triangle",dur,gainAmt:vol});
+   makeTone({freq:390,endFreq:145,type:"sine",dur,gainAmt:vol*.35});
  }
 
  if(s==="woo"){
-   makeTone({freq:520,endFreq:920,type:"sawtooth",dur:dur*.45,gainAmt:vol});
-   makeTone({freq:920,endFreq:460,type:"triangle",dur:dur*.55,gainAmt:vol*.9,start:dur*.45});
+   makeTone({freq:520,endFreq:880,type:"sawtooth",dur,gainAmt:vol*.85});
+   makeTone({freq:780,endFreq:430,type:"triangle",dur,gainAmt:vol*.45});
  }
 }
 
@@ -156,12 +149,28 @@ function stopAudio(){
 function stopAll(){
  armed=false;
  startedAt=0;
+ soundStartedAt=0;
  clearTimeout(timingTimeout);
  clearTimeout(stopTimeout);
  cancelAnimationFrame(raf);
  stopAudio();
  stateEl.textContent="Idle";
  elapsedEl.textContent="00:00.00";
+}
+
+function watchSoundCompletion(){
+ const tick=()=>{
+   if(!soundStartedAt) return;
+   const remaining=Math.max(0,soundDurationMs-(performance.now()-soundStartedAt));
+   stateEl.textContent=`Sound ${(remaining/1000).toFixed(1)}s`;
+   if(remaining>0){
+     raf=requestAnimationFrame(tick);
+   } else {
+     soundStartedAt=0;
+     stateEl.textContent="Complete";
+   }
+ };
+ tick();
 }
 
 async function arm(){
@@ -187,13 +196,14 @@ async function arm(){
       const correctedDelayMs=Math.max(0,targetDelayMs-latencyMs);
 
       timingTimeout=setTimeout(()=>{
-        stateEl.textContent="Sound";
         playSound();
-
+        watchSoundCompletion();
         stopTimeout=setTimeout(()=>{
+          stopAudio();
+          soundStartedAt=0;
           stateEl.textContent="Complete";
           startedAt=0;
-        },Number(duration.value)*1000);
+        },Number(duration.value)*1000+80);
 
       },correctedDelayMs);
    }
@@ -212,7 +222,6 @@ async function calibrateLatency(){
  stateEl.textContent="Calibrating";
  latencyReadout.innerHTML="Measured latency: <strong>listening...</strong>";
 
- // Establish ambient level before playing chirp.
  let ambient=0;
  for(let i=0;i<12;i++){
    ambient+=getDb();
@@ -240,7 +249,6 @@ async function calibrateLatency(){
  }
 
  if(detectedAt){
-   // Subtract a small acoustic/mic detection cushion. This keeps compensation conservative.
    latencyMs=Math.max(0,detectedAt-chirpStart-20);
    localStorage.setItem("soundTimerLatencyMs",String(latencyMs));
    stateEl.textContent="Calibrated";
@@ -252,12 +260,38 @@ async function calibrateLatency(){
  sync();
 }
 
+function playCalibrationChirp(){
+ const o=ctx.createOscillator();
+ const g=ctx.createGain();
+ const now=ctx.currentTime;
+ const dur=.08;
+
+ o.type="square";
+ o.frequency.setValueAtTime(2000,now);
+
+ g.gain.setValueAtTime(0.0001,now);
+ g.gain.exponentialRampToValueAtTime(1,now+.005);
+ g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+
+ o.connect(g).connect(ctx.destination);
+ o.start(now);
+ o.stop(now+dur+.02);
+ active.push(o,g);
+
+ return performance.now();
+}
+
 document.getElementById("armBtn").onclick=arm;
 
-document.getElementById("testBtn").onclick=async()=>{
+testBtn.onclick=async()=>{
  await setupAudio();
  playSound();
- setTimeout(stopAudio,Number(duration.value)*1000+100);
+ watchSoundCompletion();
+ setTimeout(()=>{
+   stopAudio();
+   soundStartedAt=0;
+   if(stateEl.textContent.startsWith("Sound")) stateEl.textContent="Idle";
+ },Number(duration.value)*1000+80);
 };
 
 document.getElementById("stopBtn").onclick=stopAll;
