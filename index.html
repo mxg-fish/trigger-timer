@@ -1,83 +1,58 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Sound Timer" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#111827" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css" />
-  <title>Sound Trigger Timer</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sound Trigger Timer</title>
+<link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-  <main class="app">
-    <section class="card">
-      <h1>Sound Trigger Timer</h1>
-      <p class="sub">Start the timer when sound crosses your threshold, then beep at your chosen interval.</p>
+<main class="app">
+<section class="card">
+<h1>Sound Trigger Timer</h1>
 
-      <div class="status">
-        <div>
-          <span class="label">State</span>
-          <strong id="state">Idle</strong>
-        </div>
-        <div>
-          <span class="label">Elapsed</span>
-          <strong id="elapsed">00:00.0</strong>
-        </div>
-      </div>
+<label>
+Alarm Sound
+<select id="soundChoice">
+<option value="beep">Beep</option>
+<option value="alarm">Alarm</option>
+<option value="gong">Gong</option>
+<option value="woo">Woo-style shout</option>
+</select>
+</label>
 
-      <div class="meter-wrap">
-        <div class="meter-labels">
-          <span>Live level</span>
-          <span id="dbReadout">-- dB</span>
-        </div>
-        <div class="meter">
-          <div id="meterBar"></div>
-          <div id="thresholdMarker"></div>
-        </div>
-      </div>
+<label>
+Delay After Trigger:
+<strong><span id="intervalValue">0.45</span>s</strong>
+<input id="interval" type="range" min="0.45" max="1.50" step="0.01" value="0.45"/>
+</label>
 
-      <label>
-        Trigger threshold: <strong><span id="thresholdValue">-35</span> dB</strong>
-        <input id="threshold" type="range" min="-80" max="-5" step="1" value="-35" />
-      </label>
+<label>
+Trigger Threshold:
+<strong><span id="thresholdValue">-35</span>dB</strong>
+<input id="threshold" type="range" min="-80" max="-5" step="1" value="-35"/>
+</label>
 
-      <label>
-        Beep interval: <strong><span id="intervalValue">5.0</span> sec</strong>
-        <input id="interval" type="range" min="0.5" max="30" step="0.5" value="5" />
-      </label>
+<div class="row">
+<button id="armBtn">Arm Trigger</button>
+<button id="testBtn">Test Sound</button>
+</div>
 
-      <label>
-        Beep volume: <strong><span id="volumeValue">70</span>%</strong>
-        <input id="volume" type="range" min="0" max="100" step="1" value="70" />
-      </label>
+<div class="status">
+<div>State: <span id="state">Idle</span></div>
+<div>Elapsed: <span id="elapsed">00:00.00</span></div>
+</div>
 
-      <label>
-        Beep frequency: <strong><span id="frequencyValue">1000</span> Hz</strong>
-        <input id="frequency" type="range" min="300" max="3000" step="50" value="1000" />
-      </label>
+<div class="meter">
+<div id="meterBar"></div>
+</div>
 
-      <div class="row">
-        <button id="armBtn" class="primary">Arm Sound Trigger</button>
-        <button id="testBtn">Test Beep</button>
-      </div>
-      <button id="stopBtn" class="danger" disabled>Stop / Reset</button>
+<div id="dbReadout">-- dB</div>
 
-      <details>
-        <summary>Install on iPhone/iPad</summary>
-        <ol>
-          <li>Host this folder on any HTTPS website.</li>
-          <li>Open the site in Safari.</li>
-          <li>Tap Share → Add to Home Screen.</li>
-          <li>Open from the Home Screen and allow microphone access.</li>
-        </ol>
-        <p>Note: iOS may pause microphone/audio when the screen locks or Safari/Home Screen app goes fully into the background.</p>
-      </details>
-    </section>
-  </main>
+<button id="stopBtn">Stop / Reset</button>
 
-  <script src="app.js"></script>
+<script src="app.js"></script>
+</section>
+</main>
 </body>
 </html>

@@ -1,180 +1,175 @@
-const stateEl = document.getElementById("state");
-const elapsedEl = document.getElementById("elapsed");
-const dbReadout = document.getElementById("dbReadout");
-const meterBar = document.getElementById("meterBar");
-const thresholdMarker = document.getElementById("thresholdMarker");
 
-const threshold = document.getElementById("threshold");
-const interval = document.getElementById("interval");
-const volume = document.getElementById("volume");
-const frequency = document.getElementById("frequency");
+const interval=document.getElementById("interval");
+const threshold=document.getElementById("threshold");
+const intervalValue=document.getElementById("intervalValue");
+const thresholdValue=document.getElementById("thresholdValue");
+const soundChoice=document.getElementById("soundChoice");
+const stateEl=document.getElementById("state");
+const elapsedEl=document.getElementById("elapsed");
+const meterBar=document.getElementById("meterBar");
+const dbReadout=document.getElementById("dbReadout");
 
-const thresholdValue = document.getElementById("thresholdValue");
-const intervalValue = document.getElementById("intervalValue");
-const volumeValue = document.getElementById("volumeValue");
-const frequencyValue = document.getElementById("frequencyValue");
+let ctx, analyser, mic, source;
+let armed=false;
+let startedAt=0;
+let raf;
+let active=[];
 
-const armBtn = document.getElementById("armBtn");
-const testBtn = document.getElementById("testBtn");
-const stopBtn = document.getElementById("stopBtn");
-
-let audioCtx, analyser, micStream, source;
-let animationId, beepTimerId, elapsedTimerId;
-let armed = false;
-let running = false;
-let startedAt = 0;
-let lastTriggerAt = 0;
-
-function syncLabels() {
-  thresholdValue.textContent = threshold.value;
-  intervalValue.textContent = Number(interval.value).toFixed(1);
-  volumeValue.textContent = volume.value;
-  frequencyValue.textContent = frequency.value;
-  thresholdMarker.style.left = `${dbToPercent(Number(threshold.value))}%`;
+function sync(){
+ intervalValue.textContent=Number(interval.value).toFixed(2);
+ thresholdValue.textContent=threshold.value;
 }
-[threshold, interval, volume, frequency].forEach(el => el.addEventListener("input", syncLabels));
-syncLabels();
+sync();
+interval.oninput=sync;
+threshold.oninput=sync;
 
-function dbToPercent(db) {
-  const min = -80, max = -5;
-  return Math.max(0, Math.min(100, ((db - min) / (max - min)) * 100));
+async function setupAudio(){
+ if(!ctx) ctx=new(window.AudioContext||window.webkitAudioContext)();
+ if(ctx.state==="suspended") await ctx.resume();
+
+ if(!mic){
+  mic=await navigator.mediaDevices.getUserMedia({audio:true});
+  source=ctx.createMediaStreamSource(mic);
+  analyser=ctx.createAnalyser();
+  analyser.fftSize=2048;
+  source.connect(analyser);
+ }
 }
 
-function formatElapsed(ms) {
-  const totalTenths = Math.floor(ms / 100);
-  const tenths = totalTenths % 10;
-  const totalSeconds = Math.floor(totalTenths / 10);
-  const seconds = totalSeconds % 60;
-  const minutes = Math.floor(totalSeconds / 60);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
+function dbPercent(db){
+ return Math.max(0,Math.min(100,((db+80)/75)*100));
 }
 
-async function setupAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioCtx.state === "suspended") await audioCtx.resume();
+function getDb(){
+ const data=new Float32Array(analyser.fftSize);
+ analyser.getFloatTimeDomainData(data);
 
-  if (!micStream) {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    });
-    source = audioCtx.createMediaStreamSource(micStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.2;
-    source.connect(analyser);
-  }
+ let sum=0;
+ for(const s of data) sum+=s*s;
+
+ const rms=Math.sqrt(sum/data.length)||0.000001;
+ return 20*Math.log10(rms);
 }
 
-function getDbLevel() {
-  const data = new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(data);
-
-  let sumSquares = 0;
-  for (const sample of data) sumSquares += sample * sample;
-  const rms = Math.sqrt(sumSquares / data.length) || 0.000001;
-
-  return 20 * Math.log10(rms);
+function elapsed(){
+ if(!startedAt) return "00:00.00";
+ const ms=performance.now()-startedAt;
+ const hundredths=Math.floor(ms/10)%100;
+ const sec=Math.floor(ms/1000)%60;
+ const min=Math.floor(ms/60000);
+ return `${String(min).padStart(2,"0")}:${String(sec).padStart(2,"0")}.${String(hundredths).padStart(2,"0")}`;
 }
 
-function monitor() {
-  const db = getDbLevel();
-  dbReadout.textContent = `${db.toFixed(1)} dB`;
-  meterBar.style.width = `${dbToPercent(db)}%`;
+function osc(start,duration,freq,type="sine",gainAmt=.6,endFreq=null){
+ const o=ctx.createOscillator();
+ const g=ctx.createGain();
 
-  const now = performance.now();
-  const debounceMs = 120;
+ o.type=type;
+ o.frequency.setValueAtTime(freq,ctx.currentTime+start);
 
-  if (armed && !running && db >= Number(threshold.value) && now - lastTriggerAt > debounceMs) {
-    lastTriggerAt = now;
-    startTimer();
-  }
+ if(endFreq){
+   o.frequency.linearRampToValueAtTime(endFreq,ctx.currentTime+start+duration);
+ }
 
-  animationId = requestAnimationFrame(monitor);
+ g.gain.setValueAtTime(0.0001,ctx.currentTime+start);
+ g.gain.exponentialRampToValueAtTime(gainAmt,ctx.currentTime+start+.02);
+ g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+duration);
+
+ o.connect(g).connect(ctx.destination);
+ o.start(ctx.currentTime+start);
+ o.stop(ctx.currentTime+start+duration+.02);
+
+ active.push(o,g);
 }
 
-function startTimer() {
-  running = true;
-  armed = false;
-  startedAt = performance.now();
+function playSound(){
+ stopAudio();
 
-  stateEl.textContent = "Running";
-  armBtn.disabled = true;
-  stopBtn.disabled = false;
+ const s=soundChoice.value;
 
-  playBeep();
+ if(s==="beep"){
+   osc(0,3,950,"sine");
+ }
 
-  beepTimerId = setInterval(playBeep, Number(interval.value) * 1000);
-  elapsedTimerId = setInterval(() => {
-    elapsedEl.textContent = formatElapsed(performance.now() - startedAt);
-  }, 100);
+ if(s==="alarm"){
+   for(let t=0;t<3;t+=0.5){
+      osc(t,.22,1200,"square");
+   }
+ }
+
+ if(s==="gong"){
+   osc(0,3,220,"triangle",0.9,120);
+   osc(0,2.5,440,"sine",0.4,200);
+ }
+
+ if(s==="woo"){
+   osc(0,0.7,450,"sawtooth",0.7,900);
+   osc(0.7,1.0,900,"sawtooth",0.7,600);
+   osc(1.7,1.3,600,"triangle",0.5,400);
+ }
 }
 
-function playBeep() {
-  if (!audioCtx) return;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-
-  osc.frequency.value = Number(frequency.value);
-  osc.type = "sine";
-
-  const now = audioCtx.currentTime;
-  const peak = Number(volume.value) / 100;
-
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), now + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-
-  osc.connect(gain).connect(audioCtx.destination);
-  osc.start(now);
-  osc.stop(now + 0.2);
+function stopAudio(){
+ for(const n of active){
+   try{
+     if(n.stop) n.stop();
+     if(n.disconnect) n.disconnect();
+   }catch(e){}
+ }
+ active=[];
 }
 
-async function arm() {
-  try {
-    await setupAudio();
-    armed = true;
-    running = false;
-    stateEl.textContent = "Armed";
-    armBtn.disabled = true;
-    stopBtn.disabled = false;
-
-    if (!animationId) monitor();
-  } catch (err) {
-    stateEl.textContent = "Mic blocked";
-    alert("Microphone access is required. On iOS, allow microphone access in Safari settings and reload the app.");
-    console.error(err);
-  }
+function stopAll(){
+ armed=false;
+ startedAt=0;
+ stateEl.textContent="Idle";
+ stopAudio();
 }
 
-function stopAll() {
-  armed = false;
-  running = false;
-  stateEl.textContent = "Idle";
-  elapsedEl.textContent = "00:00.0";
+async function arm(){
+ await setupAudio();
 
-  clearInterval(beepTimerId);
-  clearInterval(elapsedTimerId);
-  beepTimerId = null;
-  elapsedTimerId = null;
+ armed=true;
+ stateEl.textContent="Armed";
 
-  armBtn.disabled = false;
-  stopBtn.disabled = true;
+ const check=()=>{
+   if(!armed) return;
+
+   const db=getDb();
+   dbReadout.textContent=`${db.toFixed(1)} dB`;
+   meterBar.style.width=`${dbPercent(db)}%`;
+
+   if(db>=Number(threshold.value)){
+      armed=false;
+      startedAt=performance.now();
+      stateEl.textContent="Timing";
+
+      setTimeout(()=>{
+        stateEl.textContent="Alarm";
+        playSound();
+
+        setTimeout(()=>{
+          stateEl.textContent="Complete";
+        },3000);
+
+      },Number(interval.value)*1000);
+   }
+
+   elapsedEl.textContent=elapsed();
+   raf=requestAnimationFrame(check);
+ };
+
+ cancelAnimationFrame(raf);
+ check();
 }
 
-armBtn.addEventListener("click", arm);
-testBtn.addEventListener("click", async () => {
-  await setupAudio();
-  playBeep();
-});
-stopBtn.addEventListener("click", stopAll);
+document.getElementById("armBtn").onclick=arm;
 
-window.addEventListener("pagehide", () => {
-  clearInterval(beepTimerId);
-  clearInterval(elapsedTimerId);
-});
+document.getElementById("testBtn").onclick=async()=>{
+ await setupAudio();
+ playSound();
+};
+
+document.getElementById("stopBtn").onclick=()=>{
+ stopAll();
+};
