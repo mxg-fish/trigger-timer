@@ -13,7 +13,7 @@
 <main class="app">
 <section class="card">
 <h1>Sound Trigger Timer</h1>
-<p class="sub">Sound trigger → adjustable delay → latency compensation → one crisp sound with adjustable length.</p>
+<p class="sub">Continuous listening mode: every sound that crosses the threshold can trigger the selected sound.</p>
 
 <label>
 Sound
@@ -49,6 +49,17 @@ Volume:
 <input id="volume" type="range" min="0" max="100" step="1" value="100"/>
 </label>
 
+<label>
+Re-trigger Lockout:
+<strong><span id="lockoutValue">0.75</span>s</strong>
+<input id="lockout" type="range" min="0.20" max="3.00" step="0.05" value="0.75"/>
+</label>
+
+<label class="checkbox">
+<input id="continuousMode" type="checkbox" checked/>
+Continuous mode
+</label>
+
 <div class="calibration">
 <h2>Bluetooth Latency Calibration</h2>
 <p id="latencyReadout">Measured latency: <strong>0 ms</strong></p>
@@ -61,13 +72,13 @@ Volume:
 </div>
 
 <div class="row">
-<button id="armBtn" class="primary">Arm Trigger</button>
-<button id="testBtn">Test 2.50s Sound</button>
+<button id="startBtn" class="primary">Start Listening</button>
+<button id="testBtn">Test Sound</button>
 </div>
 
 <div class="status">
 <div><span class="label">State</span><strong id="state">Idle</strong></div>
-<div><span class="label">Elapsed</span><strong id="elapsed">00:00.00</strong></div>
+<div><span class="label">Triggers</span><strong id="triggerCount">0</strong></div>
 </div>
 
 <div class="meter">
@@ -75,7 +86,7 @@ Volume:
 </div>
 <div id="dbReadout">-- dB</div>
 
-<button id="stopBtn" class="danger">Stop / Reset</button>
+<button id="stopBtn" class="danger">Stop</button>
 
 <script src="app.js"></script>
 </section>

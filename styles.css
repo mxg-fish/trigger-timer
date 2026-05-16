@@ -8,6 +8,8 @@ h2{font-size:18px;margin:0 0 8px}
 label{display:block;margin:18px 0}
 input,select{width:100%;margin-top:8px}
 select{padding:12px;border-radius:12px;background:#111827;color:white;border:1px solid #4b5563}
+.checkbox{display:flex;align-items:center;gap:10px;background:#111827;border-radius:12px;padding:12px}
+.checkbox input{width:auto;margin:0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 button{padding:14px;border:none;border-radius:12px;font-weight:800;font-size:16px}
 .primary{background:#60a5fa}
